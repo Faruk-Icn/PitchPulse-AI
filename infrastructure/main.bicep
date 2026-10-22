@@ -114,8 +114,47 @@ resource analyticsSecretReader 'Microsoft.Authorization/roleAssignments@2022-04-
   }
 }
 
+resource logWorkspace 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
+  name: 'law-pp-${uniqueString(resourceGroup().id, namespaceName)}'
+  location: location
+  properties: {
+    sku: {
+      name: 'PerGB2018'
+    }
+    retentionInDays: 30
+    features: {
+      enableLogAccessUsingOnlyResourcePermissions: true
+    }
+    publicNetworkAccessForIngestion: 'Enabled'
+    publicNetworkAccessForQuery: 'Enabled'
+  }
+}
+
+resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2026-01-01' = {
+  name: 'cae-pp-${uniqueString(resourceGroup().id, namespaceName)}'
+  location: location
+  properties: {
+    appLogsConfiguration: {
+      destination: 'log-analytics'
+      logAnalyticsConfiguration: {
+        customerId: logWorkspace.properties.customerId
+        sharedKey: logWorkspace.listKeys().primarySharedKey
+      }
+    }
+    publicNetworkAccess: 'Disabled'
+    workloadProfiles: [
+      {
+        name: 'Consumption'
+        workloadProfileType: 'Consumption'
+      }
+    ]
+  }
+}
+
 output eventHubNamespaceId string = eventHubNamespace.id
 output eventHubId string = matchEvents.id
 output keyVaultName string = connectionVault.name
 output sendSecretName string = sendConnectionSecret.name
 output listenSecretName string = listenConnectionSecret.name
+output logAnalyticsWorkspaceId string = logWorkspace.id
+output containerAppsEnvironmentId string = containerAppsEnvironment.id
