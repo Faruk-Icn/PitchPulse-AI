@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Faruk-Icn/PitchPulse-AI/blob/main/config/match-event.schema.json",
+  "title": "PitchPulse synthetic match event",
+  "oneOf": [
+    { "$ref": "#/$defs/playerMetadataEvent" },
+    { "$ref": "#/$defs/positionEvent" },
+    { "$ref": "#/$defs/passEvent" },
+    { "$ref": "#/$defs/shotEvent" }
+  ],
+  "unevaluatedProperties": false,
+  "$defs": {
+    "envelope": {
+      "type": "object",
+      "required": ["schema_version", "event_id", "match_id", "sequence", "occurred_at", "event_type"],
+      "properties": {
+        "schema_version": { "const": "1.0" },
+        "event_id": { "type": "string", "format": "uuid" },
+        "match_id": { "type": "string", "minLength": 1 },
+        "sequence": { "type": "integer", "minimum": 0 },
+        "occurred_at": { "type": "string", "format": "date-time" },
+        "event_type": { "type": "string" }
+      }
+    },
+    "point": {
+      "type": "object",
+      "required": ["x", "y"],
+      "properties": {
+        "x": { "type": "number", "minimum": 0, "maximum": 100 },
+        "y": { "type": "number", "minimum": 0, "maximum": 100 }
+      },
+      "additionalProperties": false
+    },
+    "teamId": { "type": "string", "enum": ["HOME", "AWAY"] },
+    "playerId": { "type": "string", "pattern": "^(home|away)-[0-9]{2}$" },
+    "player": {
+      "type": "object",
+      "required": ["player_id", "team_id", "display_name", "role", "shirt_number"],
+      "properties": {
+        "player_id": { "$ref": "#/$defs/playerId" },
+        "team_id": { "$ref": "#/$defs/teamId" },
+        "display_name": { "type": "string", "minLength": 1 },
+        "role": { "type": "string", "enum": ["goalkeeper", "defender", "midfielder", "forward"] },
+        "shirt_number": { "type": "integer", "minimum": 1, "maximum": 99 }
+      },
+      "additionalProperties": false
+    },
+    "playerMetadataEvent": {
+      "allOf": [
+        { "$ref": "#/$defs/envelope" },
+        {
+          "type": "object",
+          "required": ["player"],
+          "properties": {
+            "event_type": { "const": "player_metadata" },
+            "player": { "$ref": "#/$defs/player" }
+          }
+        }
+      ]
+    },
+    "positionEvent": {
+      "allOf": [
+        { "$ref": "#/$defs/envelope" },
+        {
+          "type": "object",
+          "required": ["player_id", "team_id", "coordinates"],
+          "properties": {
+            "event_type": { "const": "position" },
+            "player_id": { "$ref": "#/$defs/playerId" },
+            "team_id": { "$ref": "#/$defs/teamId" },
+            "coordinates": { "$ref": "#/$defs/point" }
+          }
+        }
+      ]
+    },
+    "passEvent": {
+      "allOf": [
+        { "$ref": "#/$defs/envelope" },
+        {
+          "type": "object",
+          "required": ["player_id", "team_id", "recipient_id", "start", "end", "outcome"],
+          "properties": {
+            "event_type": { "const": "pass" },
+            "player_id": { "$ref": "#/$defs/playerId" },
+            "team_id": { "$ref": "#/$defs/teamId" },
+            "recipient_id": { "$ref": "#/$defs/playerId" },
+            "start": { "$ref": "#/$defs/point" },
+            "end": { "$ref": "#/$defs/point" },
+            "outcome": { "type": "string", "enum": ["completed", "incomplete", "intercepted"] }
+          }
+        }
+      ]
+    },
+    "shotEvent": {
+      "allOf": [
+        { "$ref": "#/$defs/envelope" },
+        {
+          "type": "object",
+          "required": ["player_id", "team_id", "location", "outcome"],
+          "properties": {
+            "event_type": { "const": "shot" },
+            "player_id": { "$ref": "#/$defs/playerId" },
+            "team_id": { "$ref": "#/$defs/teamId" },
+            "location": { "$ref": "#/$defs/point" },
+            "outcome": { "type": "string", "enum": ["goal", "saved", "off_target", "blocked"] }
+          }
+        }
+      ]
+    }
+  }
+}
