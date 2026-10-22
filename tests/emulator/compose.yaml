@@ -1,0 +1,15 @@
+services:
+  emulator:
+    image: mcr.microsoft.com/azure-messaging/eventhubs-emulator:latest
+    volumes:
+      - ./config.json:/Eventhubs_Emulator/ConfigFiles/Config.json:ro
+    ports:
+      - "5672:5672"
+    environment:
+      BLOB_SERVER: azurite
+      METADATA_SERVER: azurite
+      ACCEPT_EULA: "Y"
+    depends_on:
+      - azurite
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:latest

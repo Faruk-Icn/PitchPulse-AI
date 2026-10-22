@@ -1,0 +1,57 @@
+name: Ingestion tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - src/ingestion/**
+      - config/match-event.schema.json
+      - tests/**
+      - requirements*.txt
+      - .github/workflows/ingestion-ci.yml
+  pull_request:
+    paths:
+      - src/ingestion/**
+      - config/match-event.schema.json
+      - tests/**
+      - requirements*.txt
+      - .github/workflows/ingestion-ci.yml
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: python -m pip install -r requirements-dev.txt
+      - run: python -m unittest discover -s tests -v
+      - run: docker build -f src/ingestion/Dockerfile .
+
+  emulator:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: python -m pip install -r requirements-dev.txt
+      - name: Start Event Hubs emulator
+        run: docker compose -f tests/emulator/compose.yaml up -d
+      - name: Run real SDK integration test
+        env:
+          EVENT_HUB_TEST_CONNECTION_STRING: Endpoint=sb://localhost;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;
+          EVENT_HUB_TEST_NAME: eh1
+        run: python -m unittest discover -s tests -p test_eventhub_integration.py -v
+      - name: Show emulator logs after failure
+        if: failure()
+        run: docker compose -f tests/emulator/compose.yaml logs --no-color
+      - name: Stop emulator
+        if: always()
+        run: docker compose -f tests/emulator/compose.yaml down -v
