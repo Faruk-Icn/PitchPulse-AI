@@ -1,1 +1,2 @@
 azure-eventhub==5.15.1
+jsonschema==4.26.0

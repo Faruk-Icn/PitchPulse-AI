@@ -4,7 +4,6 @@
 work/
 outputs/
 tests/
-config/
 infrastructure/
 **/__pycache__/
 *.py[cod]

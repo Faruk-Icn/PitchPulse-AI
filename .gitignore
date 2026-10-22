@@ -2,3 +2,6 @@
 .env.*
 infrastructure/main.json
 .azure/
+__pycache__/
+*.py[cod]
+.venv/
