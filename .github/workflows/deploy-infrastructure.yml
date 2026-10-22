@@ -1,0 +1,74 @@
+name: Deploy Azure infrastructure
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - infrastructure/**
+      - .github/workflows/deploy-infrastructure.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: pitchpulse-infrastructure
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate Azure configuration
+        shell: bash
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
+          EVENT_HUB_NAMESPACE_NAME: ${{ vars.EVENT_HUB_NAMESPACE_NAME }}
+          EVENT_HUB_NAME: ${{ vars.EVENT_HUB_NAME }}
+        run: |
+          missing=0
+          for name in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID AZURE_RESOURCE_GROUP AZURE_LOCATION EVENT_HUB_NAMESPACE_NAME EVENT_HUB_NAME; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Configure $name before deploying infrastructure"
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: Sign in to Azure with OIDC
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Build and deploy Bicep
+        uses: azure/cli@v2
+        env:
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
+          EVENT_HUB_NAMESPACE_NAME: ${{ vars.EVENT_HUB_NAMESPACE_NAME }}
+          EVENT_HUB_NAME: ${{ vars.EVENT_HUB_NAME }}
+          INGESTION_PRINCIPAL_ID: ${{ vars.INGESTION_PRINCIPAL_ID }}
+          ANALYTICS_PRINCIPAL_ID: ${{ vars.ANALYTICS_PRINCIPAL_ID }}
+        with:
+          inlineScript: |
+            set -euo pipefail
+            az bicep build --file infrastructure/main.bicep --stdout > /dev/null
+            az group create --name "$AZURE_RESOURCE_GROUP" --location "$AZURE_LOCATION" --output none
+            az deployment group create \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --template-file infrastructure/main.bicep \
+              --parameters \
+                namespaceName="$EVENT_HUB_NAMESPACE_NAME" \
+                eventHubName="$EVENT_HUB_NAME" \
+                ingestionPrincipalId="$INGESTION_PRINCIPAL_ID" \
+                analyticsPrincipalId="$ANALYTICS_PRINCIPAL_ID" \
+              --output none
