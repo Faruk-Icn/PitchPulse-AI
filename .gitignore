@@ -1,0 +1,4 @@
+.env
+.env.*
+infrastructure/main.json
+.azure/
