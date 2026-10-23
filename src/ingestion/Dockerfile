@@ -16,7 +16,7 @@ RUN groupadd --system pitchpulse \
 
 WORKDIR /app
 COPY --from=builder /opt/venv /opt/venv
-COPY src ./src
+COPY src/ingestion ./src/ingestion
 COPY config/match-event.schema.json ./config/match-event.schema.json
 USER pitchpulse
 

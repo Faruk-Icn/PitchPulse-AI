@@ -1,0 +1,4 @@
+-r requirements.txt
+agent-framework-core==1.23.0
+agent-framework-foundry==1.15.0
+azure-identity==1.25.1
