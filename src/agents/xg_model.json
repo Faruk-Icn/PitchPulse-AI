@@ -1,0 +1,22 @@
+{
+  "model": "open_play_location_logistic_v1",
+  "source": "StatsBomb Open Data",
+  "source_url": "https://github.com/hudl/open-data",
+  "source_commit": "4b73468fc5b0f1950f9f66fada70ad3a4f9327cb",
+  "competition": "2018 FIFA World Cup, 64 matches",
+  "features": [
+    "intercept",
+    "distance_m/20",
+    "goal_angle_radians"
+  ],
+  "coefficients": [
+    -2.43222061,
+    -1.10290015,
+    1.2086886
+  ],
+  "train_shots": 1166,
+  "test_shots": 390,
+  "test_brier": 0.083839,
+  "constant_baseline_test_brier": 0.094956,
+  "scope": "Open-play shots; location only. No goalkeeper, defensive pressure, body part, or calibration across leagues."
+}
