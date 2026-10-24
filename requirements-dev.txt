@@ -1,1 +1,2 @@
--r requirements-agents.txt
+-r requirements-gateway.txt
+httpx==0.28.1
