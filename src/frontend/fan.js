@@ -11,6 +11,8 @@
   let reconnectDelay = 1000;
   let connectionEpoch = 0;
   let locales = null;
+  let pendingMessages = [];
+  let renderScheduled = false;
 
   const language = () => byId('language').value;
   const localized = (key) => locales?.[language()]?.labels?.[key] || key;
@@ -76,7 +78,7 @@
     commentary.textContent = summary || '';
     body.append(top, title, fact, commentary);
     card.append(rail, body);
-    if (list.querySelector('.feed-empty')) list.replaceChildren();
+    if (list.firstElementChild?.classList.contains('feed-empty')) list.replaceChildren();
     list.prepend(card);
     cards.set(event.sequence, {card, body, commentary});
     while (list.children.length > 20) {
@@ -105,7 +107,8 @@
       const card = cards.get(message.sequence);
       if (!card) return;
       const binary = atob(message.audio_base64);
-      const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+      const bytes = new Uint8Array(binary.length);
+      for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
       const url = URL.createObjectURL(new Blob([bytes], {type: message.content_type}));
       if (audioUrls.has(message.sequence)) URL.revokeObjectURL(audioUrls.get(message.sequence));
       audioUrls.set(message.sequence, url);
@@ -123,6 +126,20 @@
     }
   }
 
+  function queueMessage(message) {
+    pendingMessages.push(message);
+    if (renderScheduled) return;
+    renderScheduled = true;
+    requestAnimationFrame(() => {
+      renderScheduled = false;
+      const batch = pendingMessages;
+      pendingMessages = [];
+      for (const item of batch) {
+        try { renderMessage(item); } catch (error) { console.error('Could not render feed message', error); }
+      }
+    });
+  }
+
   function connect() {
     if (!matchId) return;
     const epoch = connectionEpoch;
@@ -135,7 +152,7 @@
     socket = new WebSocket(`${protocol}//${location.host}/ws/fan/${encodeURIComponent(matchId)}?${query}`);
     socket.addEventListener('open', () => { reconnectDelay = 1000; setStatus('connected', true); });
     socket.addEventListener('message', ({data}) => {
-      try { renderMessage(JSON.parse(data)); } catch (error) { console.error('Could not render feed message', error); }
+      try { queueMessage(JSON.parse(data)); } catch (error) { console.error('Could not render feed message', error); }
     });
     socket.addEventListener('close', () => {
       if (!matchId || epoch !== connectionEpoch) return;
@@ -152,6 +169,7 @@
     if (!selected) return;
     clearTimeout(reconnectTimer);
     connectionEpoch += 1;
+    pendingMessages = [];
     if (socket) socket.close();
     for (const url of audioUrls.values()) URL.revokeObjectURL(url);
     audioUrls.clear(); cards.clear(); list.replaceChildren();

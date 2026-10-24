@@ -59,7 +59,7 @@ jobs:
         env:
           EVENT_HUB_TEST_CONNECTION_STRING: Endpoint=sb://localhost;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;
           EVENT_HUB_TEST_NAME: eh1
-        run: python -m unittest discover -s tests -p test_eventhub_integration.py -v
+        run: python -m unittest discover -s tests -p 'test_*integration.py' -v
       - name: Show emulator logs after failure
         if: failure()
         run: docker compose -f tests/emulator/compose.yaml logs --no-color

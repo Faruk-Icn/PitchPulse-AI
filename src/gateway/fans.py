@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import json
 import logging
 from dataclasses import asdict, dataclass
 
@@ -55,15 +56,26 @@ class FanHub:
             "stats": asdict(result.stats),
         }
         self._latest_by_match[event["match_id"]] = record
-        await asyncio.gather(*(
-            self._send(socket, self._localized_record(record, subscription.profile.language))
+        recipients = [
+            (socket, subscription.profile.language)
             for socket, subscription in tuple(self._clients.items())
             if subscription.match_id == event["match_id"]
+        ]
+        payloads = {
+            language: self._encode(self._localized_record(record, language))
+            for language in {language for _, language in recipients}
+        }
+        await asyncio.gather(*(
+            self._send_text(socket, payloads[language]) for socket, language in recipients
         ))
 
     @staticmethod
     def _localized_record(record: dict, language: str) -> dict:
         return {**record, "language": language, "summary": localize_event(record["event"], language)}
+
+    @staticmethod
+    def _encode(record: dict) -> str:
+        return json.dumps(record, separators=(",", ":"), ensure_ascii=False)
 
     async def schedule_personalization(
         self, event: MatchEvent, result: CrewResult, personalizer: FanPersonalizer,
@@ -113,10 +125,13 @@ class FanHub:
                 "sequence": event["sequence"], "language": profile.language,
                 "style": profile.style,
             }
-        await asyncio.gather(*(
-            self._send(socket, record) for socket, subscription in tuple(self._clients.items())
+        recipients = [
+            socket for socket, subscription in tuple(self._clients.items())
             if subscription.match_id == event["match_id"] and subscription.profile == profile
-        ))
+        ]
+        if recipients:
+            payload = self._encode(record)
+            await asyncio.gather(*(self._send_text(socket, payload) for socket in recipients))
         if record["kind"] == "personalized_text" and self.voice_engine is not None:
             await self._publish_voice(event, profile, text)
         elif record["kind"] == "personalization_unavailable" and self.voice_engine is not None:
@@ -146,7 +161,9 @@ class FanHub:
                 "sequence": event["sequence"], "language": profile.language,
                 "style": profile.style,
             }
-        await asyncio.gather(*(self._send(socket, record) for socket in listeners))
+        if listeners:
+            payload = self._encode(record)
+            await asyncio.gather(*(self._send_text(socket, payload) for socket in listeners))
 
     def _on_task_done(self, task: asyncio.Task) -> None:
         self._personalization_tasks.discard(task)
@@ -159,12 +176,15 @@ class FanHub:
             await asyncio.gather(*self._personalization_tasks)
 
     async def _send(self, socket: WebSocket, record: dict) -> None:
+        await self._send_text(socket, self._encode(record))
+
+    async def _send_text(self, socket: WebSocket, payload: str) -> None:
         client = self._clients.get(socket)
         if client is None:
             return
         try:
             async with client.lock:
-                await asyncio.wait_for(socket.send_json(record), timeout=1.0)
+                await asyncio.wait_for(socket.send_text(payload), timeout=1.0)
         except Exception:
             self.logger.warning("fan WebSocket disconnected during delivery")
             self._clients.pop(socket, None)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from dataclasses import dataclass
 
@@ -38,18 +39,24 @@ class OverlayHub:
         if record.get("kind") == "analysis":
             self._latest = record
             self._latest_by_match[record["match_id"]] = record
-        await asyncio.gather(*(
-            self._send(socket, record) for socket, subscription in tuple(self._clients.items())
+        recipients = [
+            socket for socket, subscription in tuple(self._clients.items())
             if subscription.match_id is None or subscription.match_id == record.get("match_id")
-        ))
+        ]
+        if recipients:
+            payload = json.dumps(record, separators=(",", ":"), ensure_ascii=False)
+            await asyncio.gather(*(self._send_text(socket, payload) for socket in recipients))
 
     async def _send(self, socket: WebSocket, record: dict) -> None:
+        await self._send_text(socket, json.dumps(record, separators=(",", ":"), ensure_ascii=False))
+
+    async def _send_text(self, socket: WebSocket, payload: str) -> None:
         subscription = self._clients.get(socket)
         if subscription is None:
             return
         try:
             async with subscription.lock:
-                await asyncio.wait_for(socket.send_json(record), timeout=1.0)
+                await asyncio.wait_for(socket.send_text(payload), timeout=1.0)
         except Exception:
             self.logger.warning("studio WebSocket disconnected during overlay delivery")
             self._clients.pop(socket, None)

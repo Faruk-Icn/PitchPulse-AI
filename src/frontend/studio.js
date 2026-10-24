@@ -52,7 +52,7 @@
     detail.textContent = `${event.team_id || event.player?.team_id || 'MATCH'} · ${new Date(event.occurred_at).toLocaleTimeString()}`;
     body.append(title, detail);
     item.append(number, body);
-    if (feed.querySelector('.empty-feed')) feed.replaceChildren();
+    if (feed.firstElementChild?.classList.contains('empty-feed')) feed.replaceChildren();
     feed.prepend(item);
     while (feed.children.length > 12) feed.lastElementChild.remove();
 

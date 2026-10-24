@@ -1,8 +1,6 @@
 """One Event Hubs event reaches analyst and personalized fan WebSockets."""
 
-import asyncio
 import base64
-import json
 import os
 import tempfile
 import unittest
