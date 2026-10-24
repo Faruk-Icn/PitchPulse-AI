@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#081713">
+  <title>PitchPulse AI · Studio</title>
+  <link rel="stylesheet" href="/static/studio.css">
+  <script src="/static/studio.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark" aria-hidden="true">P<span>·</span></span><div><strong>PitchPulse <em>AI</em></strong><small>Broadcast studio</small></div></div>
+    <div class="topbar-right"><span id="connection" class="connection" role="status">Connecting…</span><span class="topbar-divider"></span><span id="match-id" class="match-id">No match connected</span></div>
+  </header>
+
+  <main class="studio">
+    <section class="hero" aria-labelledby="hero-title">
+      <div><p class="eyebrow">LIVE MATCH INTELLIGENCE <span class="eyebrow-line"></span></p><h1 id="hero-title">See the moment<br><i>behind the match.</i></h1><p class="hero-copy">Real-time tactical context, production-ready overlays, and analyst cues in one live view.</p></div>
+      <div class="hero-meta"><span>01 / STUDIO FEED</span><span id="last-sequence">Awaiting events</span></div>
+    </section>
+
+    <section class="workspace" aria-label="Live match workspace">
+      <div class="main-column">
+        <section class="panel pitch-panel" aria-labelledby="pitch-title">
+          <div class="panel-heading"><div><p class="section-index">01 / MATCH MAP</p><h2 id="pitch-title">On the pitch</h2></div><span id="event-kind" class="chip">Waiting for feed</span></div>
+          <div class="pitch-wrap"><div class="pitch" aria-label="Pitch with latest event location"><div class="pitch-center"></div><div class="pitch-box left"></div><div class="pitch-box right"></div><div id="pitch-marker" class="pitch-marker" hidden><span></span></div></div></div>
+          <div class="pitch-footer"><span>HOME <span class="direction">→</span></span><span id="event-summary">No match event received yet.</span><span><span class="direction">←</span> AWAY</span></div>
+        </section>
+
+        <section class="panel timeline-panel" aria-labelledby="timeline-title"><div class="panel-heading"><div><p class="section-index">02 / ANALYST FEED</p><h2 id="timeline-title">What just happened</h2></div><span class="live-label"><span></span> LIVE</span></div><ol id="event-feed" class="event-feed"><li class="empty-feed">Validated match events will appear here when the stream connects.</li></ol></section>
+      </div>
+
+      <aside class="side-column" aria-label="Analysis and on-air output">
+        <section class="panel insight-panel" aria-labelledby="insight-title"><div class="panel-heading"><div><p class="section-index">03 / LIVE ANALYSIS</p><h2 id="insight-title">Tactical signals</h2></div></div><div class="metric-grid"><div class="metric"><span>Pass difficulty</span><strong id="pass-difficulty">—</strong><small>Geometry index · 0–1</small></div><div class="metric"><span>Carrier pressure</span><strong id="tactical-pressure">—</strong><small>Defenders within 10 m</small></div></div><div class="stat-row"><span>Home pass accuracy</span><strong id="home-accuracy">—</strong></div><div class="stat-row"><span>Away pass accuracy</span><strong id="away-accuracy">—</strong></div><p class="metric-note">Signals appear only when sufficient event data is available.</p></section>
+
+        <section class="panel overlay-panel" aria-labelledby="overlay-title"><div class="panel-heading"><div><p class="section-index">04 / ON-AIR CUE</p><h2 id="overlay-title">Analyst overlay</h2></div><span class="chip mint">SYNCED</span></div><div class="overlay-preview"><div class="overlay-label">PITCHPULSE / LIVE INSIGHT</div><p id="overlay-text">Waiting for a verified match insight.</p><div class="overlay-rule"></div><span id="overlay-sequence">NO ACTIVE CUE</span></div><p class="panel-foot">This preview updates from the same analyst stream as the event feed.</p></section>
+      </aside>
+    </section>
+  </main>
+</body>
+</html>
