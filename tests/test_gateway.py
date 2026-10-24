@@ -23,6 +23,9 @@ class OverlayTests(unittest.TestCase):
             response = client.get("/studio")
             self.assertEqual(response.status_code, 200)
             self.assertIn("PitchPulse AI", response.text)
+            fan = client.get("/fan")
+            self.assertEqual(fan.status_code, 200)
+            self.assertIn("preferences-form", fan.text)
             with client.websocket_connect("/ws/studio") as socket:
                 client.portal.call(app.state.overlays.broadcast, record)
                 self.assertEqual(socket.receive_json(), record)

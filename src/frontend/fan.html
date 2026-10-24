@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f6ef">
+  <title>PitchPulse AI · Fan Feed</title>
+  <link rel="stylesheet" href="/static/fan.css">
+  <script src="/static/fan.js" defer></script>
+</head>
+<body>
+  <header class="site-header"><a class="wordmark" href="/fan" aria-label="PitchPulse AI fan feed"><span class="mark">P<span>·</span></span><strong>PitchPulse <em>AI</em></strong></a><span class="header-tag">THE MATCH, YOUR WAY</span></header>
+  <main class="fan-layout">
+    <section class="intro"><p class="eyebrow"><span class="pulse"></span> LIVE FAN EXPERIENCE</p><h1>Every moment.<br><i>Your perspective.</i></h1><p>Follow the match as it unfolds, with commentary in the language and style you choose.</p></section>
+
+    <div class="content-grid">
+      <aside class="preferences" aria-labelledby="preferences-heading"><div class="panel-top"><span class="panel-number">01 / SET YOUR VIEW</span><h2 id="preferences-heading">Make it yours</h2><p>Choose a match and how you want to follow it.</p></div><form id="preferences-form"><label for="match-input">Match ID</label><div class="input-wrap"><input id="match-input" name="match" autocomplete="off" required placeholder="Enter match ID" maxlength="100"><span class="input-arrow" aria-hidden="true">↗</span></div><label for="language">Language</label><select id="language" name="language"><option value="en">English</option><option value="es">Español</option><option value="fr">Français</option><option value="de">Deutsch</option><option value="ar">العربية</option></select><label for="style">Commentary style</label><select id="style" name="style"><option value="concise">Quick updates</option><option value="tactical">Tactical insight</option><option value="casual">Easygoing</option></select><label class="voice-row" for="voice"><span><strong>Voice commentary</strong><small>Listen when audio is available</small></span><input id="voice" type="checkbox" name="voice"><span class="switch" aria-hidden="true"></span></label><button type="submit" class="join-button">Join match <span aria-hidden="true">↗</span></button></form><p id="setup-note" class="setup-note">Your feed starts when you join a match.</p></aside>
+
+      <section class="feed-panel" aria-labelledby="feed-heading"><div class="feed-header"><div><span class="panel-number">02 / LIVE TIMELINE</span><h2 id="feed-heading">Match feed</h2></div><span id="feed-status" class="feed-status" role="status">Not connected</span></div><div class="score-strip"><div class="team"><span class="team-dot home"></span><div><strong>HOME</strong><small id="home-pass">Pass accuracy —</small></div></div><span class="score-divider">VS</span><div class="team away-team"><div><strong>AWAY</strong><small id="away-pass">Pass accuracy —</small></div><span class="team-dot away"></span></div></div><div id="feed-list" class="feed-list" aria-live="polite"><div class="feed-empty"><div class="empty-icon" aria-hidden="true"><span></span></div><h3>Waiting for kickoff</h3><p>Join a match to see live events and personalized commentary.</p></div></div></section>
+    </div>
+  </main>
+</body>
+</html>

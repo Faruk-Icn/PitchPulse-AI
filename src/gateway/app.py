@@ -79,6 +79,10 @@ def create_app(*, personalizer: FanPersonalizer | None = None, voice_engine: Spe
     async def studio() -> FileResponse:
         return FileResponse(FRONTEND / "index.html")
 
+    @app.get("/fan", include_in_schema=False)
+    async def fan_page() -> FileResponse:
+        return FileResponse(FRONTEND / "fan.html")
+
     @app.websocket("/ws/studio")
     async def studio_socket(socket: WebSocket) -> None:
         match_id = socket.query_params.get("match_id")
