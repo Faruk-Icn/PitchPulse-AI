@@ -115,7 +115,7 @@ class CrewTests(unittest.IsolatedAsyncioTestCase):
 
         delivered = []
 
-        async def sink(result):
+        async def sink(_event, result):
             delivered.append(result)
 
         processor = CrewStreamProcessor(

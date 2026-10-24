@@ -6,6 +6,8 @@ on:
     paths:
       - src/ingestion/**
       - src/agents/**
+      - src/gateway/**
+      - src/frontend/**
       - scripts/**
       - config/match-event.schema.json
       - tests/**
@@ -15,6 +17,8 @@ on:
     paths:
       - src/ingestion/**
       - src/agents/**
+      - src/gateway/**
+      - src/frontend/**
       - scripts/**
       - config/match-event.schema.json
       - tests/**

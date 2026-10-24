@@ -27,7 +27,7 @@ class CrewStreamProcessor:
         self, *, settings: AgentSettings | None = None,
         dead_letter: JsonlDeadLetterSink | None = None,
         storyteller_factory: Callable[[str], StorytellerAgent] | None = None,
-        narrative_sink: Callable[[CrewResult], Awaitable[None]] | None = None,
+        narrative_sink: Callable[[dict, CrewResult], Awaitable[None]] | None = None,
     ) -> None:
         self.settings = settings or AgentSettings.from_env()
         self.dead_letter = dead_letter
@@ -74,7 +74,7 @@ class CrewStreamProcessor:
     async def _publish_narrative(self, crew: MatchAgentCrew, event: dict, result: CrewResult) -> None:
         narrated = await crew.narrate(event, result)
         assert self.narrative_sink is not None
-        await self.narrative_sink(narrated)
+        await self.narrative_sink(event, narrated)
 
     async def drain(self) -> None:
         """Finish outstanding narrative outputs before clean shutdown."""
@@ -94,7 +94,7 @@ async def run_consumer() -> None:
     storyteller_factory = None
     if settings.foundry_project_endpoint and settings.foundry_model:
         storyteller_factory = lambda match_id: StorytellerAgent.from_foundry(match_id, settings)
-    async def publish_narrative(result: CrewResult) -> None:
+    async def publish_narrative(_event: dict, result: CrewResult) -> None:
         print(json.dumps({"kind": "narrative", "result": asdict(result)}, separators=(",", ":")), flush=True)
 
     processor = CrewStreamProcessor(

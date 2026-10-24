@@ -80,11 +80,11 @@
     setStatus('Connecting…', '');
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     socket = new WebSocket(`${protocol}//${location.host}/ws/studio`);
-    socket.addEventListener('open', () => { reconnectDelay = 1000; setStatus('Live connection', 'connected'); });
+    socket.addEventListener('open', () => { reconnectDelay = 1000; setStatus('Studio connected', 'connected'); });
     socket.addEventListener('message', (incoming) => {
       let message;
       try { message = JSON.parse(incoming.data); } catch { return; }
-      if (message.kind === 'analysis') renderAnalysis(message);
+      if (message.kind === 'analysis') { setStatus('Match feed live', 'connected'); renderAnalysis(message); }
       if (message.kind === 'narrative') renderNarrative(message);
     });
     socket.addEventListener('close', () => {
