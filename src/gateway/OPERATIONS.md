@@ -12,8 +12,10 @@ there is no account profile service. `/api/fan/config` serves the shared
 localization catalog. Validated events carry a translated factual summary even
 when Foundry is not configured.
 
-Set `EVENT_HUB_LISTEN_CONNECTION_STRING`, `EVENT_HUB_NAME` and a writable
-`DEAD_LETTER_PATH` to start the Event Hubs listener. An optional
+Set `EVENT_HUB_LISTEN_CONNECTION_STRING`, `EVENT_HUB_NAME` and either a writable
+`DEAD_LETTER_PATH` or all of `BLOB_ACCOUNT_URL`, `CHECKPOINT_CONTAINER`, and
+`DEAD_LETTER_CONTAINER` to start the Event Hubs listener. Blob mode uses Azure
+identity for checkpoints and rejected events. An optional
 `EVENT_HUB_CONSUMER_GROUP` selects a different group; otherwise `$Default` is
 used. The listen connection string should come from the Key Vault secret
 provisioned by `infrastructure/main.bicep`. `/health` reports whether a listener
@@ -31,12 +33,16 @@ invented fallback text.
 Set both `SPEECH_KEY` and `SPEECH_REGION` to enable Azure Speech synthesis.
 Fan clients opt in with `voice=1`; the gateway sends a `speech_audio` WebSocket
 record with base64 WAV data after the text. If Foundry is unavailable, speech
-uses the translated factual event summary. The Speech resource itself is not
-created by the current base infrastructure file.
+uses the translated factual event summary. The Speech resource and its Key
+Vault secret are defined in `infrastructure/main.bicep`.
 
-The current gateway is a single-process local service. Its WebSocket streams
-have no login or TLS termination, so do not expose it directly to the public.
-The Event Hubs listener starts from the earliest retained event and keeps match
-state only in memory. A production deployment needs durable checkpointing,
-authenticated ingress and a durable delivery sink. No Azure deployment or live
-Foundry inference is claimed by this repository change.
+`PITCHPULSE_MODE=broadcast` serves the studio routes;
+`PITCHPULSE_MODE=fan` serves the fan routes. The Azure definitions run each
+service with one replica because match state and WebSocket subscribers are held
+in memory. They use separate Event Hubs consumer groups and Blob checkpoints.
+Match statistics after a restart only include events processed since that
+restart; a state store is needed for continuous cumulative statistics.
+Container Apps ingress provides TLS, but the application does not require
+analyst sign-in yet. The GitHub Actions deployment needs the Azure OIDC secrets
+and repository variables validated in the workflow. Foundry settings are
+optional; without them, fan text and speech use localized factual summaries.

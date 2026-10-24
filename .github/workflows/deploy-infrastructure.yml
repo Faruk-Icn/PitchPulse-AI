@@ -1,10 +1,13 @@
-name: Deploy Azure infrastructure
+name: Deploy Azure services
 
 on:
   push:
     branches: [main]
     paths:
       - infrastructure/**
+      - src/**
+      - config/**
+      - requirements*.txt
       - .github/workflows/deploy-infrastructure.yml
   workflow_dispatch:
 
@@ -49,8 +52,8 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Build and deploy Bicep
-        uses: azure/cli@v2
+      - name: Build image and deploy services
+        shell: bash
         env:
           AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
           AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
@@ -58,17 +61,47 @@ jobs:
           EVENT_HUB_NAME: ${{ vars.EVENT_HUB_NAME }}
           INGESTION_PRINCIPAL_ID: ${{ vars.INGESTION_PRINCIPAL_ID }}
           ANALYTICS_PRINCIPAL_ID: ${{ vars.ANALYTICS_PRINCIPAL_ID }}
-        with:
-          inlineScript: |
-            set -euo pipefail
-            az bicep build --file infrastructure/main.bicep --stdout > /dev/null
-            az group create --name "$AZURE_RESOURCE_GROUP" --location "$AZURE_LOCATION" --output none
-            az deployment group create \
-              --resource-group "$AZURE_RESOURCE_GROUP" \
-              --template-file infrastructure/main.bicep \
-              --parameters \
-                namespaceName="$EVENT_HUB_NAMESPACE_NAME" \
-                eventHubName="$EVENT_HUB_NAME" \
-                ingestionPrincipalId="$INGESTION_PRINCIPAL_ID" \
-                analyticsPrincipalId="$ANALYTICS_PRINCIPAL_ID" \
-              --output none
+          FOUNDRY_PROJECT_ENDPOINT: ${{ vars.FOUNDRY_PROJECT_ENDPOINT }}
+          FOUNDRY_MODEL: ${{ vars.FOUNDRY_MODEL }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$FOUNDRY_PROJECT_ENDPOINT" && -z "$FOUNDRY_MODEL" ]] || [[ -z "$FOUNDRY_PROJECT_ENDPOINT" && -n "$FOUNDRY_MODEL" ]]; then
+            echo '::error::Configure FOUNDRY_PROJECT_ENDPOINT and FOUNDRY_MODEL together'
+            exit 1
+          fi
+          az bicep build --file infrastructure/main.bicep --stdout > /dev/null
+          az bicep build --file infrastructure/apps.bicep --stdout > /dev/null
+          az group create --name "$AZURE_RESOURCE_GROUP" --location "$AZURE_LOCATION" --output none
+          az deployment group create \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name pitchpulse-foundation \
+            --template-file infrastructure/main.bicep \
+            --parameters \
+              location="$AZURE_LOCATION" \
+              namespaceName="$EVENT_HUB_NAMESPACE_NAME" \
+              eventHubName="$EVENT_HUB_NAME" \
+              ingestionPrincipalId="$INGESTION_PRINCIPAL_ID" \
+              analyticsPrincipalId="$ANALYTICS_PRINCIPAL_ID" \
+            --output none
+          outputs=$(az deployment group show --resource-group "$AZURE_RESOURCE_GROUP" --name pitchpulse-foundation --query properties.outputs --output json)
+          registry_name=$(jq -r '.registryName.value' <<< "$outputs")
+          registry_server=$(jq -r '.registryServer.value' <<< "$outputs")
+          az acr build --registry "$registry_name" --image "pitchpulse-gateway:${GITHUB_SHA}" --file src/gateway/Dockerfile .
+          az deployment group create \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name pitchpulse-services \
+            --template-file infrastructure/apps.bicep \
+            --parameters \
+              location="$AZURE_LOCATION" \
+              containerAppsEnvironmentId="$(jq -r '.containerAppsEnvironmentId.value' <<< "$outputs")" \
+              registryServer="$registry_server" \
+              gatewayIdentityId="$(jq -r '.gatewayIdentityId.value' <<< "$outputs")" \
+              gatewayIdentityClientId="$(jq -r '.gatewayIdentityClientId.value' <<< "$outputs")" \
+              keyVaultName="$(jq -r '.keyVaultName.value' <<< "$outputs")" \
+              storageAccountUrl="$(jq -r '.storageAccountUrl.value' <<< "$outputs")" \
+              speechRegion="$(jq -r '.speechRegion.value' <<< "$outputs")" \
+              eventHubName="$EVENT_HUB_NAME" \
+              imageTag="$GITHUB_SHA" \
+              foundryProjectEndpoint="$FOUNDRY_PROJECT_ENDPOINT" \
+              foundryModel="$FOUNDRY_MODEL" \
+            --query properties.outputs --output json | jq -r '. | to_entries[] | "\(.key): \(.value.value)"'

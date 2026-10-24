@@ -42,6 +42,16 @@ resource matchEvents 'Microsoft.EventHub/namespaces/eventhubs@2024-01-01' = {
   }
 }
 
+resource broadcastConsumers 'Microsoft.EventHub/namespaces/eventhubs/consumerGroups@2024-01-01' = {
+  parent: matchEvents
+  name: 'broadcast'
+}
+
+resource fanConsumers 'Microsoft.EventHub/namespaces/eventhubs/consumerGroups@2024-01-01' = {
+  parent: matchEvents
+  name: 'fan'
+}
+
 resource sendRule 'Microsoft.EventHub/namespaces/eventhubs/authorizationRules@2024-01-01' = {
   parent: matchEvents
   name: 'ingestion-send'
@@ -96,6 +106,108 @@ resource listenConnectionSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' =
   }
 }
 
+resource speech 'Microsoft.CognitiveServices/accounts@2024-10-01' = {
+  name: 'sp-pp-${uniqueString(resourceGroup().id, namespaceName)}'
+  location: location
+  kind: 'SpeechServices'
+  sku: {
+    name: 'S0'
+  }
+  properties: {
+    publicNetworkAccess: 'Enabled'
+  }
+}
+
+resource speechKeySecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: connectionVault
+  name: 'speech-subscription-key'
+  properties: {
+    value: speech.listKeys().key1
+  }
+}
+
+resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
+  name: 'stpp${uniqueString(resourceGroup().id, namespaceName)}'
+  location: location
+  sku: {
+    name: 'Standard_LRS'
+  }
+  kind: 'StorageV2'
+  properties: {
+    allowBlobPublicAccess: false
+    allowSharedKeyAccess: false
+    minimumTlsVersion: 'TLS1_2'
+  }
+}
+
+resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2023-05-01' = {
+  parent: storage
+  name: 'default'
+}
+
+resource checkpointContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = {
+  parent: blobService
+  name: 'checkpoints'
+  properties: {
+    publicAccess: 'None'
+  }
+}
+
+resource deadLetterContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = {
+  parent: blobService
+  name: 'dead-letter'
+  properties: {
+    publicAccess: 'None'
+  }
+}
+
+resource registry 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
+  name: 'crpp${uniqueString(resourceGroup().id, namespaceName)}'
+  location: location
+  sku: {
+    name: 'Basic'
+  }
+  properties: {
+    adminUserEnabled: false
+    publicNetworkAccess: 'Enabled'
+  }
+}
+
+resource gatewayIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
+  name: 'id-pp-gateway-${uniqueString(resourceGroup().id, namespaceName)}'
+  location: location
+}
+
+resource gatewayAcrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(registry.id, gatewayIdentity.id, 'AcrPull')
+  scope: registry
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d')
+    principalId: gatewayIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource gatewayVaultReader 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(connectionVault.id, gatewayIdentity.id, 'Key Vault Secrets User')
+  scope: connectionVault
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')
+    principalId: gatewayIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource gatewayStorageContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(storage.id, gatewayIdentity.id, 'Storage Blob Data Contributor')
+  scope: storage
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')
+    principalId: gatewayIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
 resource ingestionSecretReader 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(ingestionPrincipalId)) {
   name: guid(sendConnectionSecret.id, ingestionPrincipalId, 'Key Vault Secrets User')
   scope: sendConnectionSecret
@@ -141,7 +253,7 @@ resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2026-01-01'
         sharedKey: logWorkspace.listKeys().primarySharedKey
       }
     }
-    publicNetworkAccess: 'Disabled'
+    publicNetworkAccess: 'Enabled'
     workloadProfiles: [
       {
         name: 'Consumption'
@@ -158,3 +270,10 @@ output sendSecretName string = sendConnectionSecret.name
 output listenSecretName string = listenConnectionSecret.name
 output logAnalyticsWorkspaceId string = logWorkspace.id
 output containerAppsEnvironmentId string = containerAppsEnvironment.id
+output registryName string = registry.name
+output registryServer string = registry.properties.loginServer
+output gatewayIdentityId string = gatewayIdentity.id
+output gatewayIdentityClientId string = gatewayIdentity.properties.clientId
+output storageAccountUrl string = 'https://${storage.name}.blob.${environment().suffixes.storage}'
+output speechRegion string = location
+output speechSecretName string = speechKeySecret.name
