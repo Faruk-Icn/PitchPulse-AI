@@ -16,14 +16,21 @@ from .engine import GatewayEngine, receive_event_hubs
 from .fans import FanHub
 from .overlays import OverlayHub
 from .personalization import FanPersonalizer, FanProfile
+from .voice import SpeechVoiceEngine
 
 
 FRONTEND = Path(__file__).resolve().parents[1] / "frontend"
 
 
-def create_app(*, personalizer: FanPersonalizer | None = None) -> FastAPI:
+def create_app(*, personalizer: FanPersonalizer | None = None, voice_engine: SpeechVoiceEngine | None = None) -> FastAPI:
     overlays = OverlayHub()
-    fans = FanHub()
+    speech_key = os.environ.get("SPEECH_KEY")
+    speech_region = os.environ.get("SPEECH_REGION")
+    if bool(speech_key) != bool(speech_region):
+        raise ValueError("SPEECH_KEY and SPEECH_REGION must be configured together")
+    if voice_engine is None and speech_key:
+        voice_engine = SpeechVoiceEngine(speech_key, speech_region)
+    fans = FanHub(voice_engine)
     settings = AgentSettings.from_env()
     if bool(settings.foundry_project_endpoint) != bool(settings.foundry_model):
         raise ValueError("FOUNDRY_PROJECT_ENDPOINT and FOUNDRY_MODEL must be configured together")
@@ -93,7 +100,11 @@ def create_app(*, personalizer: FanPersonalizer | None = None) -> FastAPI:
         except ValueError:
             await socket.close(code=1008)
             return
-        await app.state.fans.connect(socket, match_id, profile)
+        voice = socket.query_params.get("voice", "0")
+        if voice not in ("0", "1"):
+            await socket.close(code=1008)
+            return
+        await app.state.fans.connect(socket, match_id, profile, voice=voice == "1")
 
     return app
 

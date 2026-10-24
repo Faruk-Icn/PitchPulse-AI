@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import logging
 from dataclasses import asdict, dataclass
 
@@ -12,26 +13,30 @@ from src.agents.crew import CrewResult
 from src.ingestion.models import MatchEvent
 
 from .personalization import FanPersonalizer, FanProfile
+from .voice import CONTENT_TYPE, SpeechVoiceEngine
 
 
 @dataclass
 class FanSubscription:
     match_id: str
     profile: FanProfile
+    voice: bool
     lock: asyncio.Lock
 
 
 class FanHub:
-    def __init__(self) -> None:
+    def __init__(self, voice_engine: SpeechVoiceEngine | None = None) -> None:
         self._clients: dict[WebSocket, FanSubscription] = {}
         self._latest_by_match: dict[str, dict] = {}
         self._personalization_tasks: set[asyncio.Task] = set()
         self._model_slots = asyncio.Semaphore(4)
+        self._voice_slots = asyncio.Semaphore(2)
+        self.voice_engine = voice_engine
         self.logger = logging.getLogger("pitchpulse.gateway.fans")
 
-    async def connect(self, socket: WebSocket, match_id: str, profile: FanProfile) -> None:
+    async def connect(self, socket: WebSocket, match_id: str, profile: FanProfile, *, voice: bool = False) -> None:
         await socket.accept()
-        self._clients[socket] = FanSubscription(match_id, profile, asyncio.Lock())
+        self._clients[socket] = FanSubscription(match_id, profile, voice, asyncio.Lock())
         if match_id in self._latest_by_match:
             await self._send(socket, self._latest_by_match[match_id])
         try:
@@ -91,6 +96,34 @@ class FanHub:
             self._send(socket, record) for socket, subscription in tuple(self._clients.items())
             if subscription.match_id == event["match_id"] and subscription.profile == profile
         ))
+        if record["kind"] == "personalized_text" and self.voice_engine is not None:
+            await self._publish_voice(event, profile, text)
+
+    async def _publish_voice(self, event: MatchEvent, profile: FanProfile, text: str) -> None:
+        listeners = [
+            socket for socket, subscription in tuple(self._clients.items())
+            if subscription.match_id == event["match_id"]
+            and subscription.profile == profile and subscription.voice
+        ]
+        if not listeners:
+            return
+        try:
+            async with self._voice_slots:
+                audio = await asyncio.wait_for(self.voice_engine.synthesize(text, profile.language), timeout=20)
+            record = {
+                "kind": "speech_audio", "match_id": event["match_id"],
+                "sequence": event["sequence"], "language": profile.language,
+                "style": profile.style, "content_type": CONTENT_TYPE,
+                "audio_base64": base64.b64encode(audio).decode("ascii"),
+            }
+        except Exception:
+            self.logger.exception("fan speech failed match=%s sequence=%s", event["match_id"], event["sequence"])
+            record = {
+                "kind": "speech_unavailable", "match_id": event["match_id"],
+                "sequence": event["sequence"], "language": profile.language,
+                "style": profile.style,
+            }
+        await asyncio.gather(*(self._send(socket, record) for socket in listeners))
 
     def _on_task_done(self, task: asyncio.Task) -> None:
         self._personalization_tasks.discard(task)
