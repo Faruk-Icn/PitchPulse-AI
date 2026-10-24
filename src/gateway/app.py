@@ -14,6 +14,7 @@ from src.agents.config import AgentSettings
 
 from .engine import GatewayEngine, receive_event_hubs
 from .fans import FanHub
+from .localization import CATALOG
 from .overlays import OverlayHub
 from .personalization import FanPersonalizer, FanProfile
 from .voice import SpeechVoiceEngine
@@ -82,6 +83,10 @@ def create_app(*, personalizer: FanPersonalizer | None = None, voice_engine: Spe
     @app.get("/fan", include_in_schema=False)
     async def fan_page() -> FileResponse:
         return FileResponse(FRONTEND / "fan.html")
+
+    @app.get("/api/fan/config")
+    async def fan_config() -> JSONResponse:
+        return JSONResponse({"locales": CATALOG})
 
     @app.websocket("/ws/studio")
     async def studio_socket(socket: WebSocket) -> None:

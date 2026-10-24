@@ -14,8 +14,12 @@ from src.agents.config import AgentSettings
 from src.agents.crew import CrewResult
 from src.ingestion.models import MatchEvent
 
+from .localization import CATALOG
+
 
 LANGUAGES = {"en": "English", "es": "Spanish", "fr": "French", "de": "German", "ar": "Arabic"}
+if set(LANGUAGES) != set(CATALOG):
+    raise ValueError("Foundry language instructions do not match the fan catalog")
 STYLES = {"concise": "one short factual sentence", "tactical": "two short factual sentences with available tactical context", "casual": "one short accessible sentence"}
 
 

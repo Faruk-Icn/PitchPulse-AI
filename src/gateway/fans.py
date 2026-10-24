@@ -13,6 +13,7 @@ from src.agents.crew import CrewResult
 from src.ingestion.models import MatchEvent
 
 from .personalization import FanPersonalizer, FanProfile
+from .localization import localize_event
 from .voice import CONTENT_TYPE, SpeechVoiceEngine
 
 
@@ -38,7 +39,7 @@ class FanHub:
         await socket.accept()
         self._clients[socket] = FanSubscription(match_id, profile, voice, asyncio.Lock())
         if match_id in self._latest_by_match:
-            await self._send(socket, self._latest_by_match[match_id])
+            await self._send(socket, self._localized_record(self._latest_by_match[match_id], profile.language))
         try:
             while True:
                 await socket.receive_text()
@@ -55,9 +56,14 @@ class FanHub:
         }
         self._latest_by_match[event["match_id"]] = record
         await asyncio.gather(*(
-            self._send(socket, record) for socket, subscription in tuple(self._clients.items())
+            self._send(socket, self._localized_record(record, subscription.profile.language))
+            for socket, subscription in tuple(self._clients.items())
             if subscription.match_id == event["match_id"]
         ))
+
+    @staticmethod
+    def _localized_record(record: dict, language: str) -> dict:
+        return {**record, "language": language, "summary": localize_event(record["event"], language)}
 
     async def schedule_personalization(
         self, event: MatchEvent, result: CrewResult, personalizer: FanPersonalizer,
@@ -70,6 +76,21 @@ class FanHub:
             if len(self._personalization_tasks) >= 100:
                 await asyncio.wait(self._personalization_tasks, return_when=asyncio.FIRST_COMPLETED)
             task = asyncio.create_task(self._personalize(event, result, profile, personalizer))
+            self._personalization_tasks.add(task)
+            task.add_done_callback(self._on_task_done)
+
+    async def schedule_fact_voice(self, event: MatchEvent) -> None:
+        if self.voice_engine is None:
+            return
+        profiles = {
+            subscription.profile for subscription in self._clients.values()
+            if subscription.match_id == event["match_id"] and subscription.voice
+        }
+        for profile in profiles:
+            if len(self._personalization_tasks) >= 100:
+                await asyncio.wait(self._personalization_tasks, return_when=asyncio.FIRST_COMPLETED)
+            text = localize_event(event, profile.language)
+            task = asyncio.create_task(self._publish_voice(event, profile, text))
             self._personalization_tasks.add(task)
             task.add_done_callback(self._on_task_done)
 
@@ -98,6 +119,8 @@ class FanHub:
         ))
         if record["kind"] == "personalized_text" and self.voice_engine is not None:
             await self._publish_voice(event, profile, text)
+        elif record["kind"] == "personalization_unavailable" and self.voice_engine is not None:
+            await self._publish_voice(event, profile, localize_event(event, profile.language))
 
     async def _publish_voice(self, event: MatchEvent, profile: FanProfile, text: str) -> None:
         listeners = [

@@ -67,6 +67,25 @@ class VoiceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             asyncio.run(SpeechVoiceEngine("key", "westus").synthesize("Hello", "xx"))
 
+    def test_localized_fact_is_spoken_without_foundry(self):
+        class Voice:
+            def __init__(self):
+                self.calls = []
+
+            async def synthesize(self, text, language):
+                self.calls.append((text, language))
+                return b"RIFF\x00\x00\x00\x00WAVE"
+
+        voice = Voice()
+        app = create_app(voice_engine=voice)
+        with TestClient(app) as client:
+            with client.websocket_connect("/ws/fan/match-1?language=es&voice=1") as fan:
+                client.portal.call(app.state.engine.handle_body, json.dumps(PASS))
+                self.assertEqual(fan.receive_json()["summary"], "LOCAL: Pase completado")
+                client.portal.call(app.state.engine.drain)
+                self.assertEqual(fan.receive_json()["kind"], "speech_audio")
+        self.assertEqual(voice.calls, [("LOCAL: Pase completado", "es")])
+
 
 if __name__ == "__main__":
     unittest.main()

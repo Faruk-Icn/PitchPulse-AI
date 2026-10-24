@@ -53,6 +53,8 @@ class GatewayEngine:
         )
         if self.personalizer is not None and event["event_type"] in ("pass", "shot"):
             await self.fans.schedule_personalization(event, result, self.personalizer)
+        elif event["event_type"] in ("pass", "shot"):
+            await self.fans.schedule_fact_voice(event)
 
     async def _publish_narrative(self, event: dict, result) -> None:
         await self.overlays.broadcast({
