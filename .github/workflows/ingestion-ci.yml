@@ -52,7 +52,7 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
-      - run: python -m pip install -r requirements-agents.txt
+      - run: python -m pip install -r requirements-gateway.txt
       - name: Start Event Hubs emulator
         run: docker compose -f tests/emulator/compose.yaml up -d
       - name: Run real SDK integration test
