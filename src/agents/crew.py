@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import datetime
 
 from src.ingestion.models import MatchEvent
@@ -48,18 +48,17 @@ class MatchAgentCrew:
             raise ValueError("storyteller belongs to a different match")
         self.storyteller = storyteller
         self._lock = asyncio.Lock()
+        self._narrative_lock = asyncio.Lock()
         self.logger = logging.getLogger("pitchpulse.agents.crew")
 
-    async def process(self, event: MatchEvent) -> CrewResult:
+    async def process(self, event: MatchEvent, *, generate_narrative: bool = True) -> CrewResult:
         if event["match_id"] != self.match_id:
             raise ValueError("event belongs to a different match")
         async with self._lock:
             tactical = self.tactician.process(event)
             stats = self.stats_analyst.process(event)
-            narrative = None
             pass_difficulty = None
             pressure = None
-            narrative_error = None
             if event["event_type"] == "pass":
                 occurred_at = datetime.fromisoformat(event["occurred_at"].replace("Z", "+00:00"))
                 opposing_team = "AWAY" if event["team_id"] == "HOME" else "HOME"
@@ -68,19 +67,27 @@ class MatchAgentCrew:
                     event["start"], event["end"], event["team_id"], defenders,
                 )
                 pressure = calculate_tactical_pressure(event["start"], defenders)
-            if self.storyteller is not None and event["event_type"] in ("pass", "shot"):
-                try:
-                    narrative = await self.storyteller.process(
-                        event, tactical=tactical, stats=stats,
-                        calculations={
-                            "pass_difficulty": asdict(pass_difficulty) if pass_difficulty else None,
-                            "tactical_pressure": asdict(pressure) if pressure else None,
-                        },
-                    )
-                except Exception as exc:
-                    narrative_error = type(exc).__name__
-                    self.logger.exception("Storyteller failed for match=%s sequence=%s", self.match_id, event["sequence"])
-            return CrewResult(
-                self.match_id, event["sequence"], tactical, stats, narrative,
-                pass_difficulty, pressure, narrative_error,
+            result = CrewResult(
+                self.match_id, event["sequence"], tactical, stats, None,
+                pass_difficulty, pressure,
             )
+            if generate_narrative:
+                return await self.narrate(event, result)
+            return result
+
+    async def narrate(self, event: MatchEvent, result: CrewResult) -> CrewResult:
+        if self.storyteller is None or event["event_type"] not in ("pass", "shot"):
+            return result
+        async with self._narrative_lock:
+            try:
+                narrative = await self.storyteller.process(
+                    event, tactical=result.tactical, stats=result.stats,
+                    calculations={
+                        "pass_difficulty": asdict(result.pass_difficulty) if result.pass_difficulty else None,
+                        "tactical_pressure": asdict(result.tactical_pressure) if result.tactical_pressure else None,
+                    },
+                )
+            except Exception as exc:
+                self.logger.exception("Storyteller failed for match=%s sequence=%s", self.match_id, event["sequence"])
+                return replace(result, narrative_error=type(exc).__name__)
+            return replace(result, narrative=narrative)

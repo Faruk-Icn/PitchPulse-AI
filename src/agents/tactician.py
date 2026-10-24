@@ -30,33 +30,49 @@ class TacticianAgent(BaseMatchAgent):
         super().__init__(match_id, settings)
         self.players: dict[str, Player] = {}
         self.positions: dict[str, tuple[Point, datetime, TeamId]] = {}
+        self._spatial_cache: tuple[datetime, datetime, dict[str, int], dict[str, str | None], dict[str, float] | None] | None = None
 
     def process(self, event: MatchEvent) -> TacticalSnapshot:
         now = self.inspect_event(event)
         if event["event_type"] == "player_metadata":
+            self._spatial_cache = None
             player = event["player"]
             position = self.positions.get(player["player_id"])
             if position is not None and position[2] != player["team_id"]:
                 raise ValueError("player metadata team does not match position")
             self.players[player["player_id"]] = player
         elif event["event_type"] == "position":
+            self._spatial_cache = None
             player = self.players.get(event["player_id"])
             if player is not None and player["team_id"] != event["team_id"]:
                 raise ValueError("position team does not match player metadata")
             self.positions[event["player_id"]] = (event["coordinates"], now, event["team_id"])
 
-        fresh: dict[TeamId, dict[str, Point]] = {"HOME": {}, "AWAY": {}}
-        for player_id, (point, observed_at, team_id) in self.positions.items():
-            age = (now - observed_at).total_seconds()
-            if 0 <= age <= self.settings.position_max_age_seconds:
-                fresh[team_id][player_id] = point
+        cache = self._spatial_cache
+        if cache is not None and cache[0] <= now < cache[1]:
+            observed, formations, control = cache[2:]
+        else:
+            fresh: dict[TeamId, dict[str, Point]] = {
+                team: self.fresh_positions(now, team) for team in ("HOME", "AWAY")
+            }
+            observed = {team: len(points) for team, points in fresh.items()}
+            formations = {team: self._formation(team, fresh[team]) for team in ("HOME", "AWAY")}
+            control = self._pitch_control(fresh)
+            boundaries = []
+            for _, observed_at, _ in self.positions.values():
+                if observed_at > now:
+                    boundaries.append(observed_at.timestamp())
+                elif (now - observed_at).total_seconds() <= self.settings.position_max_age_seconds:
+                    boundaries.append(observed_at.timestamp() + self.settings.position_max_age_seconds)
+            expiry = min(boundaries, default=now.timestamp() + self.settings.position_max_age_seconds)
+            self._spatial_cache = (now, datetime.fromtimestamp(expiry, tz=now.tzinfo), observed, formations, control)
 
         result = TacticalSnapshot(
             match_id=self.match_id,
             sequence=event["sequence"],
-            observed_positions={team: len(points) for team, points in fresh.items()},
-            formations={team: self._formation(team, fresh[team]) for team in ("HOME", "AWAY")},
-            pitch_control_proxy=self._pitch_control(fresh),
+            observed_positions=observed,
+            formations=formations,
+            pitch_control_proxy=control,
         )
         self.complete_event(event)
         return result

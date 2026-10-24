@@ -6,10 +6,12 @@ import unittest
 import uuid
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from src.agents.consumer import CrewStreamProcessor
 from src.agents.pass_difficulty import calculate_pass_difficulty
 from src.agents.storyteller import StorytellerAgent
+from src.agents.tactician import TacticianAgent
 from src.agents.tactical_pressure import calculate_tactical_pressure
 from src.ingestion.generator import iter_match_events
 
@@ -104,6 +106,46 @@ class CrewTests(unittest.IsolatedAsyncioTestCase):
         result = await processor.process_body(json.dumps(passed))
         self.assertIsNone(result.pass_difficulty)
         self.assertIsNone(result.tactical_pressure)
+
+    async def test_analysis_does_not_wait_for_narrative(self):
+        class SlowRunner:
+            async def run(self, _message):
+                await asyncio.sleep(0.05)
+                return SimpleNamespace(text="A pass is attempted.")
+
+        delivered = []
+
+        async def sink(result):
+            delivered.append(result)
+
+        processor = CrewStreamProcessor(
+            storyteller_factory=lambda match_id: StorytellerAgent(match_id, SlowRunner()),
+            narrative_sink=sink,
+        )
+        passed = event(0, "pass", player_id="home-07", team_id="HOME",
+                       recipient_id="home-09", start={"x": 30, "y": 50},
+                       end={"x": 60, "y": 50}, outcome="completed")
+        analysis = await processor.process_body(json.dumps(passed))
+        self.assertIsNone(analysis.narrative)
+        self.assertEqual(delivered, [])
+        await processor.drain()
+        self.assertEqual(delivered[0].narrative.sequence, 0)
+
+    async def test_spatial_snapshot_is_reused_until_position_changes(self):
+        tactician = TacticianAgent("synthetic-match")
+        position = event(0, "position", player_id="away-02", team_id="AWAY",
+                         coordinates={"x": 45, "y": 50})
+        passed = event(1, "pass", player_id="home-07", team_id="HOME",
+                       recipient_id="home-09", start={"x": 30, "y": 50},
+                       end={"x": 60, "y": 50}, outcome="completed")
+        tactician.process(position)
+        with patch.object(tactician, "_pitch_control", wraps=tactician._pitch_control) as control:
+            tactician.process(passed)
+            self.assertEqual(control.call_count, 0)
+            moved = event(2, "position", player_id="away-02", team_id="AWAY",
+                          coordinates={"x": 40, "y": 50})
+            tactician.process(moved)
+            self.assertEqual(control.call_count, 1)
 
 
 if __name__ == "__main__":
