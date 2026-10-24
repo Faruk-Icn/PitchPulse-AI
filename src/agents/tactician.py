@@ -61,6 +61,13 @@ class TacticianAgent(BaseMatchAgent):
         self.complete_event(event)
         return result
 
+    def fresh_positions(self, at: datetime, team_id: TeamId) -> dict[str, Point]:
+        """Return only observations valid at the event time."""
+        return {
+            player_id: point for player_id, (point, observed_at, team) in self.positions.items()
+            if team == team_id and 0 <= (at - observed_at).total_seconds() <= self.settings.position_max_age_seconds
+        }
+
     def _formation(self, team_id: TeamId, positions: dict[str, Point]) -> str | None:
         outfielders = [
             player for player in self.players.values()

@@ -64,6 +64,7 @@ class StorytellerAgent(BaseMatchAgent):
         *,
         tactical: TacticalSnapshot | None = None,
         stats: StatsSnapshot | None = None,
+        calculations: dict | None = None,
     ) -> BroadcastNarrative:
         self.inspect_event(event)
         if tactical is not None and (tactical.match_id != self.match_id or tactical.sequence != event["sequence"]):
@@ -74,6 +75,7 @@ class StorytellerAgent(BaseMatchAgent):
             "event": event,
             "tactical": asdict(tactical) if tactical is not None else None,
             "stats": asdict(stats) if stats is not None else None,
+            "calculations": calculations,
         }
         response = await self.runner.run(json.dumps(payload, separators=(",", ":")))
         text = response.text.strip()
