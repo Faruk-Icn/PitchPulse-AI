@@ -11,6 +11,7 @@ from pathlib import Path
 
 from azure.eventhub.aio import EventHubConsumerClient, EventHubProducerClient
 
+from src.agents.consumer import CrewStreamProcessor
 from src.ingestion.dead_letter import JsonlDeadLetterSink
 from src.ingestion.generator import iter_match_events
 from src.ingestion.producer import publish_events
@@ -59,6 +60,8 @@ class EventHubRoundTripTests(unittest.TestCase):
             self.assertFalse(dead_letter_path.exists())
 
         received = []
+        processed = []
+        processor = CrewStreamProcessor()
         complete = asyncio.Event()
 
         async def on_event(_partition, event):
@@ -67,6 +70,7 @@ class EventHubRoundTripTests(unittest.TestCase):
             payload = json.loads(event.body_as_str())
             if payload.get("match_id") == match_id:
                 received.append(payload)
+                processed.append(await processor.process_body(event.body_as_str()))
                 if len(received) == len(sent):
                     complete.set()
 
@@ -81,6 +85,7 @@ class EventHubRoundTripTests(unittest.TestCase):
                 task.cancel()
                 await asyncio.gather(task, return_exceptions=True)
         self.assertEqual([event["event_id"] for event in received], [event["event_id"] for event in sent])
+        self.assertEqual([result.sequence for result in processed], [event["sequence"] for event in sent])
 
 
 if __name__ == "__main__":
