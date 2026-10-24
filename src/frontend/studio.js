@@ -6,6 +6,7 @@
   let socket;
   let reconnectDelay = 1000;
   let latestSequence = -1;
+  let currentMatch = null;
 
   function setStatus(label, className) {
     status.textContent = label;
@@ -20,6 +21,7 @@
     const event = message.event;
     const result = message.result;
     if (!event || !result || !Number.isInteger(event.sequence)) return;
+    if (event.match_id !== currentMatch) { currentMatch = event.match_id; latestSequence = -1; }
     byId('match-id').textContent = event.match_id;
     byId('last-sequence').textContent = `EVENT ${String(event.sequence).padStart(4, '0')}`;
     byId('event-kind').textContent = event.event_type.replace('_', ' ').toUpperCase();
@@ -56,8 +58,10 @@
 
     const difficulty = result.pass_difficulty;
     const pressure = result.tactical_pressure;
-    byId('pass-difficulty').textContent = difficulty == null ? '—' : difficulty.index.toFixed(2);
-    byId('tactical-pressure').textContent = pressure == null ? '—' : String(pressure.defenders_within_10m);
+    if (event.event_type === 'pass') {
+      byId('pass-difficulty').textContent = difficulty == null ? '—' : difficulty.index.toFixed(2);
+      byId('tactical-pressure').textContent = pressure == null ? '—' : String(pressure.defenders_within_10m);
+    }
     byId('home-accuracy').textContent = formatPercent(result.stats?.passing_accuracy?.HOME);
     byId('away-accuracy').textContent = formatPercent(result.stats?.passing_accuracy?.AWAY);
     if (event.sequence >= latestSequence) {
@@ -70,6 +74,7 @@
   }
 
   function renderNarrative(message) {
+    if (message.match_id !== currentMatch || message.sequence < latestSequence) return;
     const text = message.result?.narrative?.text;
     if (!text) return;
     byId('overlay-text').textContent = text;
@@ -79,7 +84,9 @@
   function connect() {
     setStatus('Connecting…', '');
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    socket = new WebSocket(`${protocol}//${location.host}/ws/studio`);
+    const matchId = new URLSearchParams(location.search).get('match_id');
+    const matchFilter = matchId ? `?match_id=${encodeURIComponent(matchId)}` : '';
+    socket = new WebSocket(`${protocol}//${location.host}/ws/studio${matchFilter}`);
     socket.addEventListener('open', () => { reconnectDelay = 1000; setStatus('Studio connected', 'connected'); });
     socket.addEventListener('message', (incoming) => {
       let message;

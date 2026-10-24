@@ -11,17 +11,30 @@ from dataclasses import asdict
 from azure.eventhub.aio import EventHubConsumerClient
 
 from src.agents.consumer import CrewStreamProcessor
+from src.agents.config import AgentSettings
+from src.agents.storyteller import StorytellerAgent
 from src.ingestion.dead_letter import JsonlDeadLetterSink
 
 from .fans import FanHub
 from .overlays import OverlayHub
+from .personalization import FanPersonalizer
 
 
 class GatewayEngine:
-    def __init__(self, overlays: OverlayHub, fans: FanHub, *, dead_letter_path: str | None = None) -> None:
+    def __init__(
+        self, overlays: OverlayHub, fans: FanHub, *, dead_letter_path: str | None = None,
+        personalizer: FanPersonalizer | None = None, settings: AgentSettings | None = None,
+    ) -> None:
         self.overlays = overlays
         self.fans = fans
+        self.personalizer = personalizer
+        settings = settings or AgentSettings.from_env()
+        storyteller_factory = (
+            (lambda match_id: StorytellerAgent.from_foundry(match_id, settings))
+            if settings.foundry_project_endpoint and settings.foundry_model else None
+        )
         self.processor = CrewStreamProcessor(
+            settings=settings, storyteller_factory=storyteller_factory,
             dead_letter=JsonlDeadLetterSink(dead_letter_path) if dead_letter_path else None,
             narrative_sink=self._publish_narrative,
         )
@@ -38,6 +51,8 @@ class GatewayEngine:
             }),
             self.fans.broadcast(event, result),
         )
+        if self.personalizer is not None and event["event_type"] in ("pass", "shot"):
+            await self.fans.schedule_personalization(event, result, self.personalizer)
 
     async def _publish_narrative(self, event: dict, result) -> None:
         await self.overlays.broadcast({
@@ -47,6 +62,7 @@ class GatewayEngine:
 
     async def drain(self) -> None:
         await self.processor.drain()
+        await self.fans.drain()
 
 
 async def receive_event_hubs(engine: GatewayEngine) -> None:

@@ -10,18 +10,29 @@ from fastapi import FastAPI, WebSocket
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from src.agents.config import AgentSettings
+
 from .engine import GatewayEngine, receive_event_hubs
 from .fans import FanHub
 from .overlays import OverlayHub
+from .personalization import FanPersonalizer, FanProfile
 
 
 FRONTEND = Path(__file__).resolve().parents[1] / "frontend"
 
 
-def create_app() -> FastAPI:
+def create_app(*, personalizer: FanPersonalizer | None = None) -> FastAPI:
     overlays = OverlayHub()
     fans = FanHub()
-    engine = GatewayEngine(overlays, fans, dead_letter_path=os.environ.get("DEAD_LETTER_PATH"))
+    settings = AgentSettings.from_env()
+    if bool(settings.foundry_project_endpoint) != bool(settings.foundry_model):
+        raise ValueError("FOUNDRY_PROJECT_ENDPOINT and FOUNDRY_MODEL must be configured together")
+    if personalizer is None and settings.foundry_project_endpoint:
+        personalizer = FanPersonalizer.from_settings(settings)
+    engine = GatewayEngine(
+        overlays, fans, dead_letter_path=os.environ.get("DEAD_LETTER_PATH"),
+        personalizer=personalizer, settings=settings,
+    )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -63,14 +74,26 @@ def create_app() -> FastAPI:
 
     @app.websocket("/ws/studio")
     async def studio_socket(socket: WebSocket) -> None:
-        await app.state.overlays.connect(socket)
+        match_id = socket.query_params.get("match_id")
+        if match_id and len(match_id) > 100:
+            await socket.close(code=1008)
+            return
+        await app.state.overlays.connect(socket, match_id)
 
     @app.websocket("/ws/fan/{match_id}")
     async def fan_socket(socket: WebSocket, match_id: str) -> None:
         if not match_id or len(match_id) > 100:
             await socket.close(code=1008)
             return
-        await app.state.fans.connect(socket, match_id)
+        try:
+            profile = FanProfile(
+                language=socket.query_params.get("language", "en"),
+                style=socket.query_params.get("style", "concise"),
+            )
+        except ValueError:
+            await socket.close(code=1008)
+            return
+        await app.state.fans.connect(socket, match_id, profile)
 
     return app
 
