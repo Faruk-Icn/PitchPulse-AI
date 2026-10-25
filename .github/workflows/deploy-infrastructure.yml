@@ -71,7 +71,10 @@ jobs:
           fi
           az bicep build --file infrastructure/main.bicep --stdout > /dev/null
           az bicep build --file infrastructure/apps.bicep --stdout > /dev/null
-          az group create --name "$AZURE_RESOURCE_GROUP" --location "$AZURE_LOCATION" --output none
+          if [[ "$(az group exists --name "$AZURE_RESOURCE_GROUP")" != "true" ]]; then
+            echo "::error::Create resource group $AZURE_RESOURCE_GROUP in $AZURE_LOCATION before deploying"
+            exit 1
+          fi
           az deployment group create \
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --name pitchpulse-foundation \
@@ -87,7 +90,7 @@ jobs:
           registry_name=$(jq -r '.registryName.value' <<< "$outputs")
           registry_server=$(jq -r '.registryServer.value' <<< "$outputs")
           az acr build --registry "$registry_name" --image "pitchpulse-gateway:${GITHUB_SHA}" --file src/gateway/Dockerfile .
-          az deployment group create \
+          app_outputs=$(az deployment group create \
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --name pitchpulse-services \
             --template-file infrastructure/apps.bicep \
@@ -104,4 +107,21 @@ jobs:
               imageTag="$GITHUB_SHA" \
               foundryProjectEndpoint="$FOUNDRY_PROJECT_ENDPOINT" \
               foundryModel="$FOUNDRY_MODEL" \
-            --query properties.outputs --output json | jq -r '. | to_entries[] | "\(.key): \(.value.value)"'
+            --query properties.outputs --output json)
+          broadcast_url=$(jq -r '.broadcastUrl.value' <<< "$app_outputs")
+          fan_url=$(jq -r '.fanUrl.value' <<< "$app_outputs")
+          echo "Broadcast studio: $broadcast_url"
+          echo "Fan feed: $fan_url"
+          connection=$(az eventhubs eventhub authorization-rule keys list \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --namespace-name "$EVENT_HUB_NAMESPACE_NAME" \
+            --eventhub-name "$EVENT_HUB_NAME" \
+            --name ingestion-send --query primaryConnectionString --output tsv)
+          echo "::add-mask::$connection"
+          export EVENT_HUB_SEND_CONNECTION_STRING="$connection"
+          python -m pip install --quiet -r requirements-dev.txt
+          python -m scripts.verify_staging \
+            --broadcast-url "$broadcast_url" \
+            --fan-url "$fan_url" \
+            --eventhub-name "$EVENT_HUB_NAME" \
+            --count 11 --max-p95-ms 1000

@@ -38,7 +38,10 @@ class DeploymentRuntimeTests(unittest.TestCase):
     def test_checkpoint_advances_after_processing(self):
         order = []
         event = SimpleNamespace(body_as_str=lambda: '{"event_id":"e-1"}')
-        partition = SimpleNamespace(update_checkpoint=AsyncMock(side_effect=lambda _event: order.append("checkpoint")))
+        partition = SimpleNamespace(
+            partition_id="0",
+            update_checkpoint=AsyncMock(side_effect=lambda _event: order.append("checkpoint")),
+        )
         engine = SimpleNamespace(
             processor=SimpleNamespace(dead_letter=None),
             handle_body=AsyncMock(side_effect=lambda _body: order.append("process")),
@@ -50,6 +53,8 @@ class DeploymentRuntimeTests(unittest.TestCase):
 
         async def receive(*, on_event, **_kwargs):
             await on_event(partition, event)
+            self.assertEqual(order, ["process"])
+            await on_event(partition, None)
 
         consumer.receive = receive
         credential = MagicMock()

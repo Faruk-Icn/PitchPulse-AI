@@ -22,6 +22,8 @@ from .blob_dead_letter import BlobDeadLetterSink
 from .overlays import OverlayHub
 from .personalization import FanPersonalizer
 
+CHECKPOINT_BATCH_SIZE = 20
+
 
 class GatewayEngine:
     def __init__(
@@ -104,25 +106,46 @@ async def receive_event_hubs(engine: GatewayEngine) -> None:
             connection, consumer_group=os.environ.get("EVENT_HUB_CONSUMER_GROUP", "$Default"),
             eventhub_name=hub_name, checkpoint_store=checkpoint_store,
         )
+        pending_checkpoints: dict[str, tuple[object, object, int]] = {}
+
+        async def flush_checkpoint(partition_id: str) -> None:
+            partition, latest_event, _ = pending_checkpoints[partition_id]
+            await partition.update_checkpoint(latest_event)
+            pending_checkpoints.pop(partition_id, None)
 
         async def on_event(partition, event) -> None:
-            if event is not None:
-                await engine.handle_body(event.body_as_str())
-                if checkpoint_store is not None:
-                    await partition.update_checkpoint(event)
+            if event is None:
+                if checkpoint_store is not None and partition.partition_id in pending_checkpoints:
+                    await flush_checkpoint(partition.partition_id)
+                return
+            await engine.handle_body(event.body_as_str())
+            if checkpoint_store is not None:
+                partition_id = partition.partition_id
+                previous = pending_checkpoints.get(partition_id)
+                count = 1 if previous is None else previous[2] + 1
+                pending_checkpoints[partition_id] = (partition, event, count)
+                if count >= CHECKPOINT_BATCH_SIZE:
+                    await flush_checkpoint(partition_id)
 
         async def on_error(partition, error) -> None:
             logger.error("Event Hubs receive failed partition=%s error=%s", partition, error)
 
         try:
             async with consumer:
-                await consumer.receive(on_event=on_event, on_error=on_error, starting_position="-1")
+                await consumer.receive(
+                    on_event=on_event, on_error=on_error,
+                    starting_position="-1", max_wait_time=5,
+                )
         finally:
-            await engine.drain()
-            if blob_dead_letter is not None:
-                await blob_dead_letter.close()
-            if checkpoint_store is not None:
-                await checkpoint_store.close()
+            try:
+                for partition_id in tuple(pending_checkpoints):
+                    await flush_checkpoint(partition_id)
+            finally:
+                await engine.drain()
+                if blob_dead_letter is not None:
+                    await blob_dead_letter.close()
+                if checkpoint_store is not None:
+                    await checkpoint_store.close()
 
 
 class _NoCredential:
