@@ -132,20 +132,20 @@ async def receive_event_hubs(engine: GatewayEngine) -> None:
 
         try:
             async with consumer:
-                await consumer.receive(
-                    on_event=on_event, on_error=on_error,
-                    starting_position="-1", max_wait_time=5,
-                )
+                try:
+                    await consumer.receive(
+                        on_event=on_event, on_error=on_error,
+                        starting_position="-1", max_wait_time=5,
+                    )
+                finally:
+                    for partition_id in tuple(pending_checkpoints):
+                        await flush_checkpoint(partition_id)
         finally:
-            try:
-                for partition_id in tuple(pending_checkpoints):
-                    await flush_checkpoint(partition_id)
-            finally:
-                await engine.drain()
-                if blob_dead_letter is not None:
-                    await blob_dead_letter.close()
-                if checkpoint_store is not None:
-                    await checkpoint_store.close()
+            await engine.drain()
+            if blob_dead_letter is not None:
+                await blob_dead_letter.close()
+            if checkpoint_store is not None:
+                await checkpoint_store.close()
 
 
 class _NoCredential:

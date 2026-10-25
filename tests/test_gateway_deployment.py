@@ -55,6 +55,11 @@ class DeploymentRuntimeTests(unittest.TestCase):
             await on_event(partition, event)
             self.assertEqual(order, ["process"])
             await on_event(partition, None)
+            for _ in range(19):
+                await on_event(partition, event)
+            self.assertEqual(partition.update_checkpoint.await_count, 1)
+            await on_event(partition, event)
+            self.assertEqual(partition.update_checkpoint.await_count, 2)
 
         consumer.receive = receive
         credential = MagicMock()
@@ -77,7 +82,7 @@ class DeploymentRuntimeTests(unittest.TestCase):
                 patch("src.gateway.engine.BlobDeadLetterSink", return_value=dead_letter), \
                 patch("src.gateway.engine.EventHubConsumerClient.from_connection_string", return_value=consumer):
             asyncio.run(receive_event_hubs(engine))
-        self.assertEqual(order, ["process", "checkpoint"])
+        self.assertEqual(order, ["process", "checkpoint"] + ["process"] * 20 + ["checkpoint"])
         self.assertIs(engine.processor.dead_letter, dead_letter)
         dead_letter.close.assert_awaited_once()
         checkpoint.close.assert_awaited_once()
