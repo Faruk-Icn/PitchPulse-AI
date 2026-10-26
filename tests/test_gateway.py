@@ -26,6 +26,10 @@ class OverlayTests(unittest.TestCase):
             fan = client.get("/fan")
             self.assertEqual(fan.status_code, 200)
             self.assertIn("preferences-form", fan.text)
+            setup = client.get("/setup")
+            self.assertEqual(setup.status_code, 200)
+            self.assertIn('id="setup-form"', setup.text)
+            self.assertEqual(client.get("/static/setup.js").status_code, 200)
             with client.websocket_connect("/ws/studio") as socket:
                 client.portal.call(app.state.overlays.broadcast, record)
                 self.assertEqual(socket.receive_json(), record)

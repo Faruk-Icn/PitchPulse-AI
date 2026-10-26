@@ -90,6 +90,10 @@ def create_app(*, personalizer: FanPersonalizer | None = None, voice_engine: Spe
             raise HTTPException(status_code=404)
         return FileResponse(FRONTEND / "index.html")
 
+    @app.get("/setup", include_in_schema=False)
+    async def setup_page() -> FileResponse:
+        return FileResponse(FRONTEND / "setup.html")
+
     @app.get("/fan", include_in_schema=False)
     async def fan_page() -> FileResponse:
         if mode == "broadcast":

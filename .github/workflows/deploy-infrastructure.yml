@@ -1,14 +1,6 @@
 name: Deploy Azure services
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - infrastructure/**
-      - src/**
-      - config/**
-      - requirements*.txt
-      - .github/workflows/deploy-infrastructure.yml
   workflow_dispatch:
 
 permissions:

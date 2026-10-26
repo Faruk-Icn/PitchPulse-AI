@@ -37,6 +37,8 @@ python -m venv .venv
 
 Open [the studio](http://127.0.0.1:8000/studio?match_id=demo-match) and [the fan feed](http://127.0.0.1:8000/fan?match_id=demo-match). The demo streams generated match events through the same validation, analysis, and WebSocket code used by the Azure gateway. Stop it with Ctrl+C. No Azure account is needed for the factual demo.
 
+To deploy your own fork, open the [self-host setup screen](http://127.0.0.1:8000/setup) while the local demo runs. Enter your GitHub fork and Azure identifiers once; the screen saves them only in that browser and gives you links to copy them into your fork's GitHub Actions settings. No credentials or connection strings belong in the screen.
+
 ## Test and benchmark
 
 ```powershell
@@ -63,7 +65,7 @@ The [deployment workflow](.github/workflows/deploy-infrastructure.yml) uses GitH
 
 Optionally set `FOUNDRY_PROJECT_ENDPOINT` and `FOUNDRY_MODEL` together as repository variables, and grant the gateway identity access to the Foundry model. Without them, studio analysis and multilingual factual fan updates still run; generated prose is unavailable. Speech uses the Azure Speech resource provisioned by the infrastructure deployment.
 
-Push to `main` or run **Deploy Azure services** from GitHub Actions. The workflow builds the gateway image in Azure Container Registry, deploys broadcast and fan Container Apps, prints their URLs, and runs the staging verifier. The [operations guide](src/gateway/OPERATIONS.md) lists runtime settings.
+Run **Deploy Azure services** manually from your fork's GitHub Actions tab after completing setup. The workflow builds the gateway image in Azure Container Registry, deploys broadcast and fan Container Apps, prints their URLs, and runs the staging verifier. The [operations guide](src/gateway/OPERATIONS.md) lists runtime settings.
 
 ## Current limits
 

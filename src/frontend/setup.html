@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#081713">
+  <title>PitchPulse AI · Self-host setup</title>
+  <link rel="stylesheet" href="/static/setup.css">
+  <script src="/static/setup.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/studio"><span class="brand-mark">P<span>·</span></span><span><strong>PitchPulse <em>AI</em></strong><small>Self-host setup</small></span></a>
+    <nav aria-label="Project views"><a href="/studio">Studio</a><a href="/fan">Fan feed</a></nav>
+  </header>
+
+  <main class="layout">
+    <section class="intro">
+      <p class="eyebrow">YOUR INFRASTRUCTURE · YOUR CONTROL</p>
+      <h1>Bring your own<br><i>Azure account.</i></h1>
+      <p>Set up a deployment from your GitHub fork. Enter your own identifiers below; this page remembers them in this browser so you can return later.</p>
+      <div class="privacy"><span aria-hidden="true">●</span><p>Saved only in this browser on this site. Nothing entered here is sent to PitchPulse AI or GitHub. Do not enter passwords, client secrets, API keys, or connection strings.</p></div>
+    </section>
+
+    <div class="columns">
+      <form id="setup-form" autocomplete="off">
+        <section class="card" aria-labelledby="repo-title">
+          <div class="card-heading"><span class="step">01</span><div><p class="kicker">REPOSITORY</p><h2 id="repo-title">Your GitHub fork</h2></div></div>
+          <p class="card-copy">These names set the links and the Azure federated credential for your deployment.</p>
+          <div class="field-grid">
+            <label>GitHub owner <input id="github-owner" name="githubOwner" required spellcheck="false" placeholder="Your GitHub username or organization"></label>
+            <label>Repository name <input id="github-repo" name="githubRepo" required spellcheck="false" placeholder="Your fork's repository name"></label>
+          </div>
+          <p id="repo-error" class="field-error" role="alert" hidden></p>
+        </section>
+
+        <section class="card" aria-labelledby="identity-title">
+          <div class="card-heading"><span class="step">02</span><div><p class="kicker">AZURE IDENTITY</p><h2 id="identity-title">Subscription &amp; app</h2></div></div>
+          <p class="card-copy">Find these IDs in your Azure subscription and Microsoft Entra app registration. Configure a GitHub Actions OIDC federated credential for your fork's <code>main</code> branch.</p>
+          <div class="field-grid">
+            <label>Subscription ID <input id="subscription-id" name="AZURE_SUBSCRIPTION_ID" spellcheck="false" placeholder="Azure subscription ID"></label>
+            <label>Directory (tenant) ID <input id="tenant-id" name="AZURE_TENANT_ID" spellcheck="false" placeholder="Microsoft Entra tenant ID"></label>
+            <label class="wide">Application (client) ID <input id="client-id" name="AZURE_CLIENT_ID" spellcheck="false" placeholder="Entra application ID"></label>
+          </div>
+          <a class="text-link" href="https://portal.azure.com/" target="_blank" rel="noopener noreferrer">Open Azure Portal <span aria-hidden="true">↗</span></a>
+        </section>
+
+        <section class="card" aria-labelledby="resources-title">
+          <div class="card-heading"><span class="step">03</span><div><p class="kicker">AZURE RESOURCES</p><h2 id="resources-title">Deployment target</h2></div></div>
+          <p class="card-copy">Create the resource group first. The Event Hubs namespace name must be globally unique.</p>
+          <div class="field-grid">
+            <label>Resource group <input id="resource-group" name="AZURE_RESOURCE_GROUP" spellcheck="false" placeholder="Existing resource group name"></label>
+            <label>Azure region code <input id="location" name="AZURE_LOCATION" spellcheck="false" placeholder="Resource group's region code"></label>
+            <label>Event Hubs namespace <input id="hub-namespace" name="EVENT_HUB_NAMESPACE_NAME" spellcheck="false" placeholder="Globally unique namespace name"></label>
+            <label>Event hub name <input id="hub-name" name="EVENT_HUB_NAME" spellcheck="false" placeholder="Match event hub name"></label>
+          </div>
+        </section>
+
+        <section class="card optional" aria-labelledby="foundry-title">
+          <div class="card-heading"><span class="step">04</span><div><p class="kicker">OPTIONAL</p><h2 id="foundry-title">Generated commentary</h2></div></div>
+          <p class="card-copy">Add both values if you have a Foundry model deployment. The factual studio and fan feeds work without them.</p>
+          <div class="field-grid">
+            <label>Foundry project endpoint <input id="foundry-endpoint" name="FOUNDRY_PROJECT_ENDPOINT" spellcheck="false" placeholder="Your project endpoint"></label>
+            <label>Foundry model name <input id="foundry-model" name="FOUNDRY_MODEL" spellcheck="false" placeholder="Your deployed model name"></label>
+          </div>
+          <p id="foundry-error" class="field-error" role="alert" hidden></p>
+        </section>
+      </form>
+
+      <aside class="sidebar" aria-label="Setup progress and next steps">
+        <section class="card progress-card">
+          <p class="kicker">SETUP PROGRESS</p>
+          <div class="progress-number"><strong id="completed-count">0</strong><span>/ 9 fields</span></div>
+          <div class="progress-track"><span id="progress-fill"></span></div>
+          <p id="save-status" class="save-status" role="status">Ready to save in this browser.</p>
+          <button id="clear-details" type="button" class="clear-button">Clear saved details</button>
+        </section>
+
+        <section class="card next-card">
+          <p class="kicker">FINISH IN AZURE &amp; GITHUB</p>
+          <h2>Connect your fork</h2>
+          <ol class="checklist">
+            <li>Create the resource group and Entra app in Azure.</li>
+            <li>Add an OIDC federated credential for <code id="oidc-repo">your-owner/your-repo</code> on branch <code>main</code>.</li>
+            <li>Grant that app Contributor and Role Based Access Control Administrator on the resource group.</li>
+            <li>Copy the settings below into your fork's GitHub Actions settings.</li>
+            <li>Run the deployment workflow and check its staging result.</li>
+          </ol>
+          <div class="actions"><a id="secrets-link" class="action-link disabled" aria-disabled="true">Open GitHub secrets <span>↗</span></a><a id="variables-link" class="action-link disabled" aria-disabled="true">Open GitHub variables <span>↗</span></a><a id="workflow-link" class="action-link disabled" aria-disabled="true">Run deployment workflow <span>↗</span></a></div>
+        </section>
+
+        <section class="card settings-card">
+          <p class="kicker">COPY TO GITHUB ACTIONS</p>
+          <h2>Your settings</h2>
+          <p class="card-copy">Each value stays in your browser until you copy it. Secrets go in repository secrets; the rest go in repository variables.</p>
+          <div id="settings-list" class="settings-list"></div>
+        </section>
+      </aside>
+    </div>
+    <footer>Need the full walkthrough? Read the <a href="https://github.com/Faruk-Icn/PitchPulse-AI/blob/main/docs/AZURE_SETUP.md" target="_blank" rel="noopener noreferrer">self-host deployment guide ↗</a>.</footer>
+  </main>
+</body>
+</html>
